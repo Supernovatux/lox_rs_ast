@@ -1,0 +1,17 @@
+use std::path::PathBuf;
+
+pub mod cli;
+pub fn run_file(file: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    // Read the file and run
+    let contents = std::fs::read_to_string(file)?;
+    run(contents)
+}
+pub fn run_prompt() -> Result<(), Box<dyn std::error::Error>> {
+    let mut rl = DefaultEditor::new()?;
+    let readline = rl.readline(">> ")?;
+
+    todo!();
+}
+fn run(source: String) -> Result<(), Box<dyn std::error::Error>> {
+    todo!();
+}
