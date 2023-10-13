@@ -96,25 +96,22 @@ impl<'a> Scanner<'a> {
     }
     pub fn is_at_end(&self) -> bool {
         if self.source.is_empty() {
-            return true;
-        } else if self.source.chars().next() == Some('\0') {
-            return true;
+            true
         } else {
-            return false;
+            self.source.starts_with('\0')
         }
     }
     pub fn peek(&self) -> Result<char, ScanError> {
         self.source
             .chars()
-            .skip(1)
-            .next()
+            .nth(1)
             .ok_or(ScanError::UnexpectedEndOfFile(self.line))
     }
     fn tok_num(&mut self) -> Result<(), ScanError> {
         let substr: String = self
             .source
             .chars()
-            .take_while(|c| c.is_digit(10))
+            .take_while(|c| c.is_ascii_digit())
             .collect::<String>();
         let num: f64 = substr
             .parse()
@@ -131,7 +128,7 @@ impl<'a> Scanner<'a> {
             .take_while(|c| *c != '"')
             .collect();
         let num_bytes = substr.len();
-        if self.source.chars().skip(num_bytes + 1).next() != Some('"') {
+        if self.source.chars().nth(num_bytes + 1) != Some('"') {
             return Err(ScanError::UnterminatedString(self.line));
         }
         self.chomp(substr.len() + 2);
@@ -176,11 +173,7 @@ impl<'a> Scanner<'a> {
 
         for &(pattern, matcher) in &pairs {
             if self.source.starts_with(pattern) {
-                let leftovers: String = self
-                    .source
-                    .chars()
-                    .take_while(|c| *c != matcher.into())
-                    .collect();
+                let leftovers: String = self.source.chars().take_while(|c| *c != matcher).collect();
                 let num_bytes = leftovers.len();
                 debug!("Skipping comment: {}", leftovers);
                 if num_bytes == 0 {
@@ -211,7 +204,6 @@ impl<'a> Scanner<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use log::info;
     macro_rules! lexer_test {
     ($test_name:ident,$lexeme:expr , $( $x:expr ),*) => {
         #[test]

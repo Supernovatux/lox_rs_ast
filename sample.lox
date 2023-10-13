@@ -1,0 +1,6 @@
+print 1 + 10;
+print "Hello " + "World";
+
+print 50 + 23 *( 6 - (-6));
+// 123 123 
+print 1232;

@@ -2,11 +2,11 @@ use clap::Parser;
 use log::*;
 use lox_rs_ast::{
     cli::{Cli, Commands},
-    run_file, run_prompt,
+    run_file, run_prompt, LoxError,
 };
 use simplelog::*;
 use std::fs::File;
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), LoxError> {
     let args = Cli::parse();
     let config = ConfigBuilder::new()
         .set_level_color(Level::Error, Some(Color::Rgb(191, 0, 0)))
@@ -30,9 +30,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
     ])
     .unwrap();
-    error!("Bright red error");
-    info!("This only appears in the log file");
-    debug!("This level is currently not enabled for any logger");
     if let Some(file) = args.command {
         match file {
             Commands::File { file } => run_file(file),
