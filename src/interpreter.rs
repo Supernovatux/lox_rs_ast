@@ -1,9 +1,10 @@
-use std::hint::unreachable_unchecked;
+use std::{hint::unreachable_unchecked, mem};
 
 use thiserror::Error;
 
 use crate::{
     ast::{Expr, ExprVisitor, Stmt, StmtVisitor},
+    environment::Environment,
     tokens::TokenType,
 };
 #[derive(Error, Debug)]
@@ -12,10 +13,15 @@ pub enum InterpreterError {
     RuntimeError(String, usize),
 }
 type InterpreterResult = Result<TokenType, InterpreterError>;
-pub struct Interpreter {}
+#[derive(Default)]
+pub struct Interpreter {
+    environment: Environment,
+}
 impl Interpreter {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            environment: Environment::new(None),
+        }
     }
     pub fn interpret(&mut self, stmt: Vec<Stmt>) -> InterpreterResult {
         for stmt in stmt {
@@ -40,6 +46,18 @@ impl Interpreter {
         let n2 = Interpreter::get_number(t2, "Right operand must be a number.".to_string())?;
         Ok((n1, n2))
     }
+    fn execute_block(
+        &mut self,
+        statements: &[Stmt],
+        environment: Environment,
+    ) -> Result<(), InterpreterError> {
+        let previous = mem::replace(&mut self.environment, environment);
+        for stmt in statements {
+            self.execute(stmt)?;
+        }
+        self.environment = previous;
+        Ok(())
+    }
 }
 impl StmtVisitor<Result<(), InterpreterError>> for Interpreter {
     fn visit_expr_stmt(&mut self, stmt: &crate::ast::Stmt) -> Result<(), InterpreterError> {
@@ -58,6 +76,26 @@ impl StmtVisitor<Result<(), InterpreterError>> for Interpreter {
                 println!("{}", value);
                 Ok(())
             }
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+    fn visit_var_stmt(&mut self, stmt: &crate::ast::Stmt) -> Result<(), InterpreterError> {
+        match stmt {
+            Stmt::Var { name, initializer } => {
+                let value = self.evaluate(initializer)?;
+                self.environment.define(name.to_string(), value);
+                Ok(())
+            }
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn visit_block_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpreterError> {
+        match stmt {
+            Stmt::Block { statements } => self.execute_block(
+                statements,
+                Environment::new(Some(Box::new(self.environment.clone()))),
+            ),
             _ => unsafe { unreachable_unchecked() },
         }
     }
@@ -152,6 +190,34 @@ impl ExprVisitor<Result<TokenType, InterpreterError>> for Interpreter {
                         .unwrap()),
                     _ => unsafe { unreachable_unchecked() },
                 }
+            }
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn visit_var_expr(&mut self, expr: &Expr) -> Result<TokenType, InterpreterError> {
+        match expr {
+            Expr::Var { name } => match self.environment.get(name.to_string().as_str()) {
+                Some(v) => Ok(v.clone()),
+                None => Err(InterpreterError::RuntimeError(
+                    "Undefined variable".to_string(),
+                    0,
+                )),
+            },
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn visit_assign_expr(&mut self, expr: &Expr) -> Result<TokenType, InterpreterError> {
+        match expr {
+            Expr::Assign { name, value } => {
+                let value = self.evaluate(value)?;
+                self.environment
+                    .assign(name.to_string().as_str(), value.clone())
+                    .ok_or_else(|| {
+                        InterpreterError::RuntimeError("Undefined variable".to_string(), name.line)
+                    })?;
+                Ok(value)
             }
             _ => unsafe { unreachable_unchecked() },
         }

@@ -1,3 +1,4 @@
+use interpreter::Interpreter;
 use rustyline::DefaultEditor;
 use scanner::Scanner;
 use std::path::PathBuf;
@@ -5,6 +6,7 @@ use thiserror::Error;
 
 pub mod ast;
 pub mod cli;
+pub mod environment;
 pub mod interpreter;
 pub mod parser;
 pub mod scanner;
@@ -26,34 +28,43 @@ pub enum LoxError {
 pub fn run_file(file: PathBuf) -> Result<(), LoxError> {
     // Read the file and run
     let contents = std::fs::read_to_string(file)?;
-    run(contents)
+    run(contents, None).map(|_| ())
 }
 pub fn run_prompt() -> Result<(), LoxError> {
+    //println!("{:?}", stmt);
+    let mut interpreter = interpreter::Interpreter::new();
     let mut rl = DefaultEditor::new()?;
     loop {
         let readline = rl.readline(">> ");
         let line = readline?;
         rl.add_history_entry(line.as_str())?;
-        match run(line) {
+        let mut scanner = Scanner::new(line.as_str());
+        let tokens = scanner.scan_tokens()?;
+        let mut parser = parser::Parser::new(tokens);
+        let stmt = parser.parse()?;
+        match interpreter.interpret(stmt) {
             Ok(_) => (),
             Err(e) => {
-                log::error!("{}", e);
+                eprintln!("{}", e);
             }
         }
     }
 }
-fn run(source: String) -> Result<(), LoxError> {
+fn run(source: String, interpreter: Option<Interpreter>) -> Result<Interpreter, LoxError> {
     let mut scanner = Scanner::new(source.as_str());
     let tokens = scanner.scan_tokens()?;
     let mut parser = parser::Parser::new(tokens);
     let stmt = parser.parse()?;
     //println!("{:?}", stmt);
-    let mut interpreter = interpreter::Interpreter::new();
+    let mut interpreter = match interpreter {
+        Some(i) => i,
+        None => interpreter::Interpreter::new(),
+    };
     match interpreter.interpret(stmt) {
-        Ok(_) => Ok(()),
+        Ok(_) => Ok(interpreter),
         Err(e) => {
-            log::error!("{}", e);
-            Ok(())
+            eprintln!("{}", e);
+            Ok(interpreter)
         }
     }
 }

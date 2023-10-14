@@ -25,15 +25,58 @@ impl Parser {
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
         let mut stmt = Vec::new();
         while !self.is_at_end() {
-            stmt.push(self.statement()?);
+            stmt.push(self.declaration()?);
         }
         Ok(stmt)
+    }
+    fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_token(&[TokenType::Var]) {
+            match self.var_declaration() {
+                Ok(stmt) => return Ok(stmt),
+                Err(e) => {
+                    self.synchronize();
+                    return Err(e);
+                }
+            }
+        }
+        self.statement()
+    }
+    fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self
+            .consume(
+                TokenType::Identifier("".to_string()),
+                "Expect variable name.",
+            )?
+            .clone();
+        let initializer = if self.match_token(&[TokenType::Equal]) {
+            self.expression()?
+        } else {
+            Expr::Literal {
+                value: Token::new(TokenType::Nil, 0),
+            }
+        };
+        self.consume(
+            TokenType::Semicolon,
+            "Expect ';' after variable declaration.",
+        )?;
+        Ok(Stmt::Var { name, initializer })
     }
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         if self.match_token(&[TokenType::Print]) {
             return self.print_statement();
         }
+        if self.match_token(&[TokenType::LeftBrace]) {
+            return self.block_statement();
+        }
         self.expression_statement()
+    }
+    fn block_statement(&mut self) -> Result<Stmt, ParseError> {
+        let mut statements = Vec::new();
+        while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+        Ok(Stmt::Block { statements })
     }
     fn print_statement(&mut self) -> Result<Stmt, ParseError> {
         let value = self.expression()?;
@@ -46,7 +89,23 @@ impl Parser {
         Ok(Stmt::Expression { expression: value })
     }
     fn expression(&mut self) -> Result<Expr, ParseError> {
-        self.equality()
+        self.assignment()
+    }
+    fn assignment(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.equality()?;
+        if self.match_token(&[TokenType::Equal]) {
+            let value = self.assignment()?;
+            match expr {
+                Expr::Var { name } => {
+                    return Ok(Expr::Assign {
+                        name,
+                        value: Box::new(value),
+                    })
+                }
+                _ => return Err(ParseError::Panic("Invalid assignment target.".to_string())),
+            }
+        }
+        Ok(expr)
     }
     fn equality(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.comparison()?;
@@ -140,6 +199,11 @@ impl Parser {
         if self.match_token(&[TokenType::String(String::new())]) {
             return Ok(Expr::Literal {
                 value: self.previous().clone(),
+            });
+        }
+        if self.match_token(&[TokenType::Identifier(String::new())]) {
+            return Ok(Expr::Var {
+                name: self.previous().clone(),
             });
         }
         if self.match_token(&[TokenType::LeftParen]) {

@@ -3,6 +3,10 @@ use std::hint::unreachable_unchecked;
 use crate::tokens::Token;
 #[derive(Debug)]
 pub enum Expr {
+    Assign {
+        name: Token,
+        value: Box<Expr>,
+    },
     Binary {
         left: Box<Expr>,
         operator: Token,
@@ -18,21 +22,30 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    Var {
+        name: Token,
+    },
 }
 #[derive(Debug)]
 pub enum Stmt {
     Expression { expression: Expr },
     Print { expression: Expr },
+    Var { name: Token, initializer: Expr },
+    Block { statements: Vec<Stmt> },
 }
 pub trait ExprVisitor<T> {
     fn visit_binary_expr(&mut self, expr: &Expr) -> T;
     fn visit_grouping_expr(&mut self, expr: &Expr) -> T;
     fn visit_literal_expr(&mut self, expr: &Expr) -> T;
     fn visit_unary_expr(&mut self, expr: &Expr) -> T;
+    fn visit_var_expr(&mut self, expr: &Expr) -> T;
+    fn visit_assign_expr(&mut self, expr: &Expr) -> T;
 }
 pub trait StmtVisitor<T> {
     fn visit_print_stmt(&mut self, stmt: &Stmt) -> T;
     fn visit_expr_stmt(&mut self, stmt: &Stmt) -> T;
+    fn visit_var_stmt(&mut self, stmt: &Stmt) -> T;
+    fn visit_block_stmt(&mut self, stmt: &Stmt) -> T;
 }
 impl Expr {
     pub fn accept<T>(&self, visitor: &mut dyn ExprVisitor<T>) -> T {
@@ -48,6 +61,8 @@ impl Expr {
                 operator: _,
                 right: _,
             } => visitor.visit_unary_expr(self),
+            Expr::Var { name: _ } => visitor.visit_var_expr(self),
+            Expr::Assign { name: _, value: _ } => visitor.visit_assign_expr(self),
         }
     }
 }
@@ -56,6 +71,11 @@ impl Stmt {
         match self {
             Stmt::Expression { expression: _ } => visitor.visit_expr_stmt(self),
             Stmt::Print { expression: _ } => visitor.visit_print_stmt(self),
+            Stmt::Var {
+                name: _,
+                initializer: _,
+            } => visitor.visit_var_stmt(self),
+            Stmt::Block { statements: _ } => visitor.visit_block_stmt(self),
         }
     }
 }
@@ -96,6 +116,19 @@ impl ExprVisitor<String> for AstPrinter {
     fn visit_literal_expr(&mut self, expr: &Expr) -> String {
         match expr {
             Expr::Literal { value } => format!("{:?}", value),
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+    fn visit_var_expr(&mut self, expr: &Expr) -> String {
+        match expr {
+            Expr::Var { name } => format!("{:?}", name),
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn visit_assign_expr(&mut self, expr: &Expr) -> String {
+        match expr {
+            Expr::Assign { name, value } => format!("{:?}={:?}", name, value),
             _ => unsafe { unreachable_unchecked() },
         }
     }
