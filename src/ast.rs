@@ -18,6 +18,11 @@ pub enum Expr {
     Literal {
         value: Token,
     },
+    Logical {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
     Unary {
         operator: Token,
         right: Box<Expr>,
@@ -28,10 +33,28 @@ pub enum Expr {
 }
 #[derive(Debug)]
 pub enum Stmt {
-    Expression { expression: Expr },
-    Print { expression: Expr },
-    Var { name: Token, initializer: Expr },
-    Block { statements: Vec<Stmt> },
+    Expression {
+        expression: Expr,
+    },
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
+    Print {
+        expression: Expr,
+    },
+    Var {
+        name: Token,
+        initializer: Expr,
+    },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
+    Block {
+        statements: Vec<Stmt>,
+    },
 }
 pub trait ExprVisitor<T> {
     fn visit_binary_expr(&mut self, expr: &Expr) -> T;
@@ -40,12 +63,15 @@ pub trait ExprVisitor<T> {
     fn visit_unary_expr(&mut self, expr: &Expr) -> T;
     fn visit_var_expr(&mut self, expr: &Expr) -> T;
     fn visit_assign_expr(&mut self, expr: &Expr) -> T;
+    fn visit_logical_expr(&mut self, expr: &Expr) -> T;
 }
 pub trait StmtVisitor<T> {
     fn visit_print_stmt(&mut self, stmt: &Stmt) -> T;
+    fn visit_if_stmt(&mut self, stmt: &Stmt) -> T;
     fn visit_expr_stmt(&mut self, stmt: &Stmt) -> T;
     fn visit_var_stmt(&mut self, stmt: &Stmt) -> T;
     fn visit_block_stmt(&mut self, stmt: &Stmt) -> T;
+    fn visit_while_stmt(&mut self, stmt: &Stmt) -> T;
 }
 impl Expr {
     pub fn accept<T>(&self, visitor: &mut dyn ExprVisitor<T>) -> T {
@@ -57,6 +83,11 @@ impl Expr {
             } => visitor.visit_binary_expr(self),
             Expr::Grouping { expression: _ } => visitor.visit_grouping_expr(self),
             Expr::Literal { value: _ } => visitor.visit_literal_expr(self),
+            Expr::Logical {
+                left: _,
+                operator: _,
+                right: _,
+            } => visitor.visit_logical_expr(self),
             Expr::Unary {
                 operator: _,
                 right: _,
@@ -76,6 +107,15 @@ impl Stmt {
                 initializer: _,
             } => visitor.visit_var_stmt(self),
             Stmt::Block { statements: _ } => visitor.visit_block_stmt(self),
+            Stmt::If {
+                condition: _,
+                then_branch: _,
+                else_branch: _,
+            } => visitor.visit_if_stmt(self),
+            Stmt::While {
+                condition: _,
+                body: _,
+            } => visitor.visit_while_stmt(self),
         }
     }
 }
@@ -129,6 +169,22 @@ impl ExprVisitor<String> for AstPrinter {
     fn visit_assign_expr(&mut self, expr: &Expr) -> String {
         match expr {
             Expr::Assign { name, value } => format!("{:?}={:?}", name, value),
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn visit_logical_expr(&mut self, expr: &Expr) -> String {
+        match expr {
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => format!(
+                "({} {:?} {})",
+                self.print(left),
+                operator,
+                self.print(right)
+            ),
             _ => unsafe { unreachable_unchecked() },
         }
     }

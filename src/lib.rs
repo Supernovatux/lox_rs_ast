@@ -42,6 +42,7 @@ pub fn run_prompt() -> Result<(), LoxError> {
         let tokens = scanner.scan_tokens()?;
         let mut parser = parser::Parser::new(tokens);
         let stmt = parser.parse()?;
+        println!("{:?}", stmt);
         match interpreter.interpret(stmt) {
             Ok(_) => (),
             Err(e) => {

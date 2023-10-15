@@ -60,15 +60,6 @@ impl Interpreter {
     }
 }
 impl StmtVisitor<Result<(), InterpreterError>> for Interpreter {
-    fn visit_expr_stmt(&mut self, stmt: &crate::ast::Stmt) -> Result<(), InterpreterError> {
-        match stmt {
-            Stmt::Expression { expression } => {
-                self.evaluate(expression)?;
-                Ok(())
-            }
-            _ => unsafe { unreachable_unchecked() },
-        }
-    }
     fn visit_print_stmt(&mut self, stmt: &crate::ast::Stmt) -> Result<(), InterpreterError> {
         match stmt {
             Stmt::Print { expression } => {
@@ -79,6 +70,33 @@ impl StmtVisitor<Result<(), InterpreterError>> for Interpreter {
             _ => unsafe { unreachable_unchecked() },
         }
     }
+    fn visit_if_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpreterError> {
+        match stmt {
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                if TryInto::<bool>::try_into(self.evaluate(condition)?).unwrap() {
+                    self.execute(then_branch)?;
+                } else if let Some(else_branch) = else_branch {
+                    self.execute(else_branch)?;
+                }
+                Ok(())
+            }
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+    fn visit_expr_stmt(&mut self, stmt: &crate::ast::Stmt) -> Result<(), InterpreterError> {
+        match stmt {
+            Stmt::Expression { expression } => {
+                self.evaluate(expression)?;
+                Ok(())
+            }
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
     fn visit_var_stmt(&mut self, stmt: &crate::ast::Stmt) -> Result<(), InterpreterError> {
         match stmt {
             Stmt::Var { name, initializer } => {
@@ -96,6 +114,18 @@ impl StmtVisitor<Result<(), InterpreterError>> for Interpreter {
                 statements,
                 Environment::new(Some(Box::new(self.environment.clone()))),
             ),
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn visit_while_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpreterError> {
+        match stmt {
+            Stmt::While { condition, body } => {
+                while TryInto::<bool>::try_into(self.evaluate(condition)?).unwrap() {
+                    self.execute(body)?;
+                }
+                Ok(())
+            }
             _ => unsafe { unreachable_unchecked() },
         }
     }
@@ -218,6 +248,36 @@ impl ExprVisitor<Result<TokenType, InterpreterError>> for Interpreter {
                         InterpreterError::RuntimeError("Undefined variable".to_string(), name.line)
                     })?;
                 Ok(value)
+            }
+            _ => unsafe { unreachable_unchecked() },
+        }
+    }
+
+    fn visit_logical_expr(&mut self, expr: &Expr) -> Result<TokenType, InterpreterError> {
+        match expr {
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => {
+                let left = self.evaluate(left)?;
+                match operator.token_type {
+                    TokenType::Or => {
+                        if TryInto::<bool>::try_into(left.clone()).unwrap() {
+                            Ok(left)
+                        } else {
+                            self.evaluate(right)
+                        }
+                    }
+                    TokenType::And => {
+                        if !TryInto::<bool>::try_into(left.clone()).unwrap() {
+                            Ok(left)
+                        } else {
+                            self.evaluate(right)
+                        }
+                    }
+                    _ => unsafe { unreachable_unchecked() },
+                }
             }
             _ => unsafe { unreachable_unchecked() },
         }
