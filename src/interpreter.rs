@@ -1,4 +1,4 @@
-use std::{hint::unreachable_unchecked, mem};
+use std::hint::unreachable_unchecked;
 
 use thiserror::Error;
 
@@ -20,7 +20,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            environment: Environment::new(None),
+            environment: Environment::new(),
         }
     }
     pub fn interpret(&mut self, stmt: Vec<Stmt>) -> InterpreterResult {
@@ -46,16 +46,12 @@ impl Interpreter {
         let n2 = Interpreter::get_number(t2, "Right operand must be a number.".to_string())?;
         Ok((n1, n2))
     }
-    fn execute_block(
-        &mut self,
-        statements: &[Stmt],
-        environment: Environment,
-    ) -> Result<(), InterpreterError> {
-        let previous = mem::replace(&mut self.environment, environment);
+    fn execute_block(&mut self, statements: &[Stmt]) -> Result<(), InterpreterError> {
+        self.environment.enter_scope();
         for stmt in statements {
             self.execute(stmt)?;
         }
-        self.environment = previous;
+        self.environment.exit_scope();
         Ok(())
     }
 }
@@ -110,10 +106,7 @@ impl StmtVisitor<Result<(), InterpreterError>> for Interpreter {
 
     fn visit_block_stmt(&mut self, stmt: &Stmt) -> Result<(), InterpreterError> {
         match stmt {
-            Stmt::Block { statements } => self.execute_block(
-                statements,
-                Environment::new(Some(Box::new(self.environment.clone()))),
-            ),
+            Stmt::Block { statements } => self.execute_block(statements),
             _ => unsafe { unreachable_unchecked() },
         }
     }

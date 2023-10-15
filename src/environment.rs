@@ -1,42 +1,41 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use crate::tokens::TokenType;
 #[derive(Default, Clone, Debug)]
 pub struct Environment {
-    enclosing: Option<Box<Environment>>,
-    values: HashMap<String, TokenType>,
+    values: VecDeque<HashMap<String, TokenType>>,
 }
 impl Environment {
-    pub fn new(enclosing: Option<Box<Environment>>) -> Self {
-        Self {
-            enclosing,
-            values: HashMap::new(),
-        }
+    pub fn new() -> Self {
+        let mut values = VecDeque::new();
+        values.push_front(HashMap::new());
+        Self { values }
     }
     pub fn define(&mut self, name: String, value: TokenType) {
-        self.values.insert(name.clone(), value.clone());
-        println!("define {} {}", name, value);
+        self.values.front_mut().unwrap().insert(name, value);
     }
-    pub fn get(&self, name: &str) -> Option<&TokenType> {
-        let val = self.values.get(name).or_else(|| {
-            self.enclosing
-                .as_ref()
-                .and_then(|enclosing| enclosing.get(name))
-        });
-        val
+    pub fn get(&self, name: &str) -> Option<TokenType> {
+        for i in &self.values {
+            if i.contains_key(name) {
+                let val = i.get(name).unwrap().clone();
+                return Some(val);
+            }
+        }
+        None
     }
     pub fn assign(&mut self, name: &str, value: TokenType) -> Option<()> {
-        println!("Self values {:?}", self.values);
-        if self.values.contains_key(name) {
-            self.values.insert(name.to_string(), value.clone());
-            println!("{} {:?}", value, self.get(name));
-            Some(())
-        } else {
-            println!("{:?}", self.enclosing);
-            self.enclosing
-                .as_mut()
-                .and_then(|enclosing| enclosing.assign(name, value))
-                .or(None)
+        for i in self.values.iter_mut() {
+            if i.contains_key(name) {
+                i.insert(name.to_string(), value);
+                return Some(());
+            }
         }
+        None
+    }
+    pub fn enter_scope(&mut self) {
+        self.values.push_front(HashMap::new());
+    }
+    pub fn exit_scope(&mut self) {
+        self.values.pop_front();
     }
 }
